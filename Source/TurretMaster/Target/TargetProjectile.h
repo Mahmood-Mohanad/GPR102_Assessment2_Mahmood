@@ -7,7 +7,7 @@
 #include "TargetProjectile.generated.h"
 
 class UProjectileMovementComponent;
-class USphereComponent;
+class USphereComponent; 
 
 UCLASS()
 class TURRETMASTER_API ATargetProjectile : public AActor
@@ -26,6 +26,9 @@ public:
 	// Called every frame
 	virtual void Tick(float DeltaTime) override;
 
+	UPROPERTY(EditAnywhere)
+	UProjectileMovementComponent* ProjectileMovement;
+
 protected:
 	// Components
 	UPROPERTY(EditAnywhere)
@@ -34,6 +37,5 @@ protected:
 	UPROPERTY(EditAnywhere)
 	USphereComponent* SphereCollider;
 
-	UPROPERTY(EditAnywhere)
-	UProjectileMovementComponent* ProjectileMovement;
+	
 };

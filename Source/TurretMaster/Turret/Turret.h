@@ -34,6 +34,16 @@ public:
 	UFUNCTION()
 	void SetPitch(float TargetPitch) const;
 
+	// Function that will handle the aiming calculations.
+	// It takes the projectile information as parameters.
+	UFUNCTION()
+	void AimingMath(float ProjectileSpeed, FVector ProjectileLocation, FVector ProjectileVelocity, float ProjectileTime);
+
+	// Step 5: Add a function that will be bound to the launcher’s delegate.
+	// This function will receive projectile info.
+	UFUNCTION()
+	void OnTargetProjectileLaunched(float ProjectileSpeed, FVector ProjectileLocation, FVector ProjectileVelocity, float ProjectileTime);
+
 protected:
 	// Components
 	UPROPERTY(EditDefaultsOnly)

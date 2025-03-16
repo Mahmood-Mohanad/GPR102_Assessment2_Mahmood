@@ -9,6 +9,17 @@
 class ATargetProjectile;
 class UArrowComponent;
 
+
+//Declare a dynamic multicast delegate with all the parameters we need
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_FourParams(
+	FOnTargetProjectileLaunched,
+	float, ProjectileSpeed,
+	FVector, ProjectileLocation,
+	FVector, ProjectileVelocity,
+	float, ProjectileTime
+);
+
+
 UCLASS()
 class TURRETMASTER_API ATargetLauncher : public AActor
 {
@@ -28,6 +39,12 @@ public:
 
 	UFUNCTION(BlueprintCallable)
 	void LaunchTarget();
+
+
+	//setting up the delegate UPROPERTY
+	UPROPERTY(EditDefaultsOnly, BlueprintAssignable, Category = "Events")
+	FOnTargetProjectileLaunched OnTargetProjectileLaunched;
+
 
 protected:
 	// Components
