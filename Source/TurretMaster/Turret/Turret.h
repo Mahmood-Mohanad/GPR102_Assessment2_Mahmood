@@ -7,6 +7,8 @@
 #include "Turret.generated.h"
 
 class ATurretProjectile;
+class ATargetProjectile;
+
 
 UCLASS()
 class TURRETMASTER_API ATurret : public AActor
@@ -20,6 +22,9 @@ public:
 protected:
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
+
+	// Pointer to the current target projectile
+	ATargetProjectile* CurrentTargetProjectile = nullptr;
 
 public:	
 	// Called every frame
@@ -42,7 +47,7 @@ public:
 	// Step 5: Add a function that will be bound to the launcher’s delegate.
 	// This function will receive projectile info.
 	UFUNCTION()
-	void OnTargetProjectileLaunched(float ProjectileSpeed, FVector ProjectileLocation, FVector ProjectileVelocity, float ProjectileTime);
+	void OnTargetProjectileLaunched(float ProjectileSpeed, FVector ProjectileLocation, FVector ProjectileVelocity, float ProjectileTime, ATargetProjectile* TargetProjectilePtr);
 
 protected:
 	// Components
@@ -50,10 +55,13 @@ protected:
 	UStaticMeshComponent* BaseMesh;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)
-	USceneComponent* RotationPoint;
+	USceneComponent* YawRotator;
 
 	UPROPERTY(EditDefaultsOnly)
 	UStaticMeshComponent* ArmMesh;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)
+	USceneComponent* PitchRotator;
 	
 	UPROPERTY(EditDefaultsOnly)
 	UStaticMeshComponent* CannonMesh;
@@ -67,4 +75,18 @@ protected:
 
 	UPROPERTY(EditDefaultsOnly)
 	float TurnSpeed = 5.0f;
+
+	// Store latest target info
+	float LastTargetProjectileSpeed = 0.0f;
+	FVector LastTargetProjectileLocation = FVector::ZeroVector;
+	FVector LastTargetProjectileVelocity = FVector::ZeroVector;
+	float LastTargetProjectileTime = 0.0f;
+
+private:
+	// Delay before firing once aim is computed.
+	UPROPERTY(EditDefaultsOnly, Category = "Firing")
+	float FiringDelay = 0.5f;
+
+	// Timer handle used to schedule firing.
+	FTimerHandle FiringTimerHandle;
 };

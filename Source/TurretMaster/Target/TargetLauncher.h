@@ -11,12 +11,13 @@ class UArrowComponent;
 
 
 //Declare a dynamic multicast delegate with all the parameters we need
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_FourParams(
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_FiveParams(
 	FOnTargetProjectileLaunched,
 	float, ProjectileSpeed,
 	FVector, ProjectileLocation,
 	FVector, ProjectileVelocity,
-	float, ProjectileTime
+	float, ProjectileTime,
+	ATargetProjectile*, TargetProjectilePtr
 );
 
 

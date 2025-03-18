@@ -1,13 +1,15 @@
 ﻿// CG Spectrum 2025
 
 // This file's header
+
 #include "Turret.h"
-
+#include "TargetProjectile.h"      // Contains our ATargetProjectile forward declaration and pointer
+#include "GameFramework/ProjectileMovementComponent.h" // Provides the full definition of UProjectileMovementComponent
 #include "TurretProjectile.h"
-
 #include "TargetLauncher.h"
-
 #include "EngineUtils.h"
+#include "DrawDebugHelpers.h"
+
 
 
 // Sets default values
@@ -19,17 +21,20 @@ ATurret::ATurret()
 	BaseMesh = CreateDefaultSubobject<UStaticMeshComponent>("BaseMesh");
 	RootComponent = BaseMesh;
 	
-	RotationPoint = CreateDefaultSubobject<USceneComponent>("RotationPoint");
-	RotationPoint->SetupAttachment(RootComponent);
+    YawRotator = CreateDefaultSubobject<USceneComponent>("RotationPoint");
+    YawRotator->SetupAttachment(RootComponent);
 	
-	ArmMesh = CreateDefaultSubobject<UStaticMeshComponent>("ArmMesh");
-	ArmMesh->SetupAttachment(RotationPoint);
-	
-	CannonMesh = CreateDefaultSubobject<UStaticMeshComponent>("CannonMesh");
-	CannonMesh->SetupAttachment(ArmMesh);
-	
-	CentreMuzzle = CreateDefaultSubobject<USceneComponent>("CentreMuzzle");
-	CentreMuzzle->SetupAttachment(CannonMesh);
+    ArmMesh = CreateDefaultSubobject<UStaticMeshComponent>("ArmMesh");
+    ArmMesh->SetupAttachment(YawRotator);
+
+    PitchRotator = CreateDefaultSubobject<USceneComponent>("RotationPointCannon");
+    PitchRotator->SetupAttachment(ArmMesh);
+
+    CannonMesh = CreateDefaultSubobject<UStaticMeshComponent>("CannonMesh");
+    CannonMesh->SetupAttachment(PitchRotator);
+
+    CentreMuzzle = CreateDefaultSubobject<USceneComponent>("CentreMuzzle");
+    CentreMuzzle->SetupAttachment(CannonMesh);
 
 }
 
@@ -56,56 +61,82 @@ void ATurret::BeginPlay()
 // Called every frame
 void ATurret::Tick(float DeltaTime)
 {
-	Super::Tick(DeltaTime);
+    Super::Tick(DeltaTime);
 
-	// (TODO) Calculate impact point
+    // If we have a valid target projectile pointer, update its current location and velocity.
+    if (CurrentTargetProjectile && CurrentTargetProjectile->IsValidLowLevel())
+    {
+        // Update stored target data with current values.
+        LastTargetProjectileLocation = CurrentTargetProjectile->GetActorLocation();
+        if (CurrentTargetProjectile->ProjectileMovement)
+        {
+            LastTargetProjectileVelocity = CurrentTargetProjectile->ProjectileMovement->Velocity;
+            LastTargetProjectileSpeed = CurrentTargetProjectile->ProjectileMovement->InitialSpeed; // or update as needed
+        }
+    }
 
-	// (TODO) Set yaw and pitch
-
-	// (TODO) Check muzzle is pointed at impact point
-
-	// (TODO) If it is, FIRE!
+    // If we have valid target data, update aiming continuously.
+    if (LastTargetProjectileSpeed > 0.0f)
+    {
+        AimingMath(LastTargetProjectileSpeed, LastTargetProjectileLocation, LastTargetProjectileVelocity, LastTargetProjectileTime);
+    }
 }
 
 void ATurret::Fire() const
 {
-	// Spawn Parameters
-	FActorSpawnParameters SpawnParams;
-	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+    FActorSpawnParameters SpawnParams;
+    SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
 
-	// Spawn the turret projectile
-	AActor* SpawnedProjectile = GetWorld()->SpawnActor<AActor>(ProjectileClass, CentreMuzzle->GetComponentLocation(), CentreMuzzle->GetComponentRotation(), SpawnParams);
-	if (SpawnedProjectile)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("Turret Projectile spawned."));
-	}
+    AActor* SpawnedProjectile = GetWorld()->SpawnActor<AActor>(ProjectileClass, CentreMuzzle->GetComponentLocation(), CentreMuzzle->GetComponentRotation(), SpawnParams);
+    if (SpawnedProjectile)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Turret Projectile spawned."));
+    }
 }
 
 void ATurret::SetYaw(float TargetYaw) const
 {
-	FRotator CurrentRotation = RotationPoint->GetComponentRotation();
-	float NewYaw = FMath::FInterpTo(CurrentRotation.Yaw, TargetYaw, GetWorld()->GetDeltaSeconds(), TurnSpeed);
-	RotationPoint->SetWorldRotation(FRotator(CurrentRotation.Pitch, NewYaw, CurrentRotation.Roll));
+    // Get current rotation of the base.
+    FRotator CurrentRotation = YawRotator->GetComponentRotation();
+
+    // Interpolate the yaw value.
+    float NewYaw = FMath::FInterpTo(CurrentRotation.Yaw, TargetYaw, GetWorld()->GetDeltaSeconds(), TurnSpeed);
+
+    // Create a new rotation keeping pitch unchanged.
+    FRotator NewRotation(CurrentRotation.Pitch, NewYaw, CurrentRotation.Roll);
+    YawRotator->SetWorldRotation(NewRotation);
 }
 
 void ATurret::SetPitch(float TargetPitch) const
 {
-	FRotator CurrentRotation = RotationPoint->GetComponentRotation();
-	float NewPitch = FMath::FInterpTo(CurrentRotation.Pitch, TargetPitch, GetWorld()->GetDeltaSeconds(), TurnSpeed);
-	RotationPoint->SetWorldRotation(FRotator(NewPitch, CurrentRotation.Yaw, CurrentRotation.Roll));
+  // Get the current relative rotation of the PitchRotator.
+  FRotator CurrentRelRotation = PitchRotator->GetRelativeRotation();
+
+  // Interpolate to the target pitch.
+  float NewPitch = FMath::FInterpTo(CurrentRelRotation.Pitch, TargetPitch, GetWorld()->GetDeltaSeconds(), TurnSpeed);
+
+  // Keep other components of rotation unchanged.
+  FRotator NewRelRotation(NewPitch, CurrentRelRotation.Yaw, CurrentRelRotation.Roll);
+  PitchRotator->SetRelativeRotation(NewRelRotation);
 }
 
 // Implement the function that will be called when the launcher broadcasts.
-void ATurret::OnTargetProjectileLaunched(float ProjectileSpeed, FVector ProjectileLocation, FVector ProjectileVelocity, float ProjectileTime)
+void ATurret::OnTargetProjectileLaunched(float ProjectileSpeed, FVector ProjectileLocation, FVector ProjectileVelocity, float ProjectileTime, ATargetProjectile* TargetProjectilePtr)
 {
-	UE_LOG(LogTemp, Warning, TEXT("Turret received projectile info: Speed: %.2f, Location: %s, Velocity: %s, Time: %.2f"),
-		ProjectileSpeed,
-		*ProjectileLocation.ToString(),
-		*ProjectileVelocity.ToString(),
-		ProjectileTime);
+    UE_LOG(LogTemp, Warning, TEXT("Turret received target info: Speed: %.2f, Location: %s, Velocity: %s, Time: %.2f"),
+        ProjectileSpeed,
+        *ProjectileLocation.ToString(),
+        *ProjectileVelocity.ToString(),
+        ProjectileTime);
 
-	// Now call the AimingMath function with the new parameter included.
-	AimingMath(ProjectileSpeed, ProjectileLocation, ProjectileVelocity, ProjectileTime);
+    // Store the pointer to the current target projectile.
+    CurrentTargetProjectile = TargetProjectilePtr;
+
+    // Also update the stored data.
+    LastTargetProjectileSpeed = ProjectileSpeed;
+    LastTargetProjectileLocation = ProjectileLocation;
+    LastTargetProjectileVelocity = ProjectileVelocity;
+    LastTargetProjectileTime = ProjectileTime;
 }
 
 void ATurret::AimingMath(float ProjectileSpeed, FVector ProjectileLocation, FVector ProjectileVelocity, float ProjectileTime)
@@ -118,7 +149,8 @@ void ATurret::AimingMath(float ProjectileSpeed, FVector ProjectileLocation, FVec
         ProjectileTime);
 
     // Get the turret's current location (S).
-    FVector S = GetActorLocation();
+    //FVector S = GetActorLocation(); //Doesn't work as intended
+    FVector S = YawRotator->GetComponentLocation();
 
     // Compute the relative target position (R = T - S), where T is the projectile's initial location.
     FVector R = ProjectileLocation - S;
@@ -138,6 +170,7 @@ void ATurret::AimingMath(float ProjectileSpeed, FVector ProjectileLocation, FVec
     //    |R|² + 2*(R • V)*Δt + |V|²*(Δt)² = B²*(Δt)²
     // Rearranging, we get a quadratic of the form:
     //    a * (Δt)² + b * Δt + c = 0, where:
+
     float B = ProjectileSpeed;
     float a = ProjectileVelocity.SizeSquared() - (B * B);  // a = |V|² - B²
     float b = 2.0f * FVector::DotProduct(R, ProjectileVelocity); // b = 2 * (R • V)
@@ -152,25 +185,27 @@ void ATurret::AimingMath(float ProjectileSpeed, FVector ProjectileLocation, FVec
     }
 
     float sqrtDiscriminant = FMath::Sqrt(discriminant);
-
-    // Two possible solutions:
+    // Two possible solutions (we should choose one later):
     float t1 = (-b + sqrtDiscriminant) / (2.0f * a);
     float t2 = (-b - sqrtDiscriminant) / (2.0f * a);
-
     // Choose the smallest positive Δt.
     float impactTime = -1.0f;
+
     if (t1 > 0.0f && t2 > 0.0f)
     {
         impactTime = FMath::Min(t1, t2);
     }
+
     else if (t1 > 0.0f)
     {
         impactTime = t1;
     }
+
     else if (t2 > 0.0f)
     {
         impactTime = t2;
     }
+
     else
     {
         UE_LOG(LogTemp, Warning, TEXT("No positive time solution for impact."));
@@ -185,8 +220,7 @@ void ATurret::AimingMath(float ProjectileSpeed, FVector ProjectileLocation, FVec
     FVector AimVector = ImpactPoint - S;
     AimVector.Normalize();
 
-    // Convert the aim vector to a rotation.
-    // This creates a rotation with the X-axis pointing along AimVector.
+    // Convert the aim vector to a rotation using UE build in function.
     FRotator DesiredRotation = FRotationMatrix::MakeFromX(AimVector).Rotator(); //I used (Chat GPT) for this
 
     // Extract yaw and pitch from the rotation.
@@ -200,6 +234,24 @@ void ATurret::AimingMath(float ProjectileSpeed, FVector ProjectileLocation, FVec
     // Adjust the turret's rotation.
     SetYaw(desiredYaw);
     SetPitch(desiredPitch);
-    Fire();
+    //Fire();
+
+    // Draw a debug line from the turret's pivot (RotationPoint) to the predicted ImpactPoint.
+    DrawDebugLine(
+        GetWorld(),
+        YawRotator->GetComponentLocation(),   // start point
+        ImpactPoint,                              // end point
+        FColor::Red,                              // line color
+        false,                                    // do not persist indefinitely
+        1.5f,                                     // duration (in seconds)
+        0,                                        // depth priority
+        5.0f                                      // thickness
+    );
+
+    // Now schedule firing after a delay.
+    if (!GetWorld()->GetTimerManager().IsTimerActive(FiringTimerHandle))
+    {
+        GetWorld()->GetTimerManager().SetTimer(FiringTimerHandle, this, &ATurret::Fire, FiringDelay, false);
+    }
 }
 
