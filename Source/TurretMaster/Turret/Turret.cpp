@@ -195,14 +195,11 @@ void ATurret::AimingMath(float ProjectileSpeed, FVector ProjectileLocation, FVec
 
     // Log the computed values.
     UE_LOG(LogTemp, Warning, TEXT("ImpactTime: %.2f, ImpactPoint: %s, AimVector: %s"), //I used (Chat GPT) for this
-        impactTime, *ImpactPoint.ToString(), *AimVector.ToString());
+    impactTime, *ImpactPoint.ToString(), *AimVector.ToString());
 
     // Adjust the turret's rotation.
     SetYaw(desiredYaw);
     SetPitch(desiredPitch);
-
-    // (Optional) If the turret is now properly aimed, fire the projectile.
-    // You might want to add a threshold check here in the future.
     Fire();
 }
 

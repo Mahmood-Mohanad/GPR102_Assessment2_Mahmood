@@ -88,6 +88,7 @@ void ATargetLauncher::LaunchTarget()
 
 			// Broadcast the event. This notifies all bound listeners (i.e turret).
 			OnTargetProjectileLaunched.Broadcast(ProjectileSpeed, ProjectileLocation, ProjectileVelocity, ProjectileTime);
+		}
 	}
 }
 
