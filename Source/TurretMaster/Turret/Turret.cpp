@@ -29,6 +29,7 @@ ATurret::ATurret()
 
     PitchRotator = CreateDefaultSubobject<USceneComponent>("RotationPointCannon");
     PitchRotator->SetupAttachment(ArmMesh);
+    PitchRotator->SetRelativeLocation(FVector(0.0f, 0.0f, -20.0f));
 
     CannonMesh = CreateDefaultSubobject<UStaticMeshComponent>("CannonMesh");
     CannonMesh->SetupAttachment(PitchRotator);
@@ -84,15 +85,9 @@ void ATurret::Tick(float DeltaTime)
 
 void ATurret::Fire() const
 {
-    FActorSpawnParameters SpawnParams;
-    SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
 
-    AActor* SpawnedProjectile = GetWorld()->SpawnActor<AActor>(ProjectileClass, CentreMuzzle->GetComponentLocation(), CentreMuzzle->GetComponentRotation(), SpawnParams);
-    if (SpawnedProjectile)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("Turret Projectile spawned."));
-    }
 }
+
 
 void ATurret::SetYaw(float TargetYaw) const
 {
@@ -141,114 +136,116 @@ void ATurret::OnTargetProjectileLaunched(float ProjectileSpeed, FVector Projecti
 
 void ATurret::AimingMath(float ProjectileSpeed, FVector ProjectileLocation, FVector ProjectileVelocity, float ProjectileTime)
 {
-    // Log the received parameters for debugging.
-    UE_LOG(LogTemp, Warning, TEXT("AimingMath called with: Speed: %.2f, Location: %s, Velocity: %s, Time: %.2f"),
+    UE_LOG(LogTemp, Warning, TEXT("AimingMath (gravity) called with: Speed: %.2f, Location: %s, Velocity: %s, Time: %.2f"),
         ProjectileSpeed,
         *ProjectileLocation.ToString(),
         *ProjectileVelocity.ToString(),
         ProjectileTime);
 
-    // Get the turret's current location (S).
-    //FVector S = GetActorLocation(); //Doesn't work as intended
-    FVector S = YawRotator->GetComponentLocation();
+    // Define the firing origin S as the location of PitchRotator.
+    FVector S = BaseMesh->GetComponentLocation();
 
-    // Compute the relative target position (R = T - S), where T is the projectile's initial location.
+    // Let R be the initial relative position vector from S to the target's spawn position.
     FVector R = ProjectileLocation - S;
 
-    // For the formulas, we use:
-    // S: turret location
-    // T: Projectile Location
-    // V: Projectile Velocity
-    // B: Projectile Speed
-    // Δt: time to impact
+    // Get gravity vector.
+    FVector g = FVector(0.0f, 0.0f, GetWorld()->GetGravityZ());
 
-    //  Set up the quadratic equation:
-    //    |R + V * Δt| = B * Δt
-    // Squaring both sides gives:
-    //    (R + V*Δt) • (R + V*Δt) = (B * Δt)²
-    // Expanding results in:
-    //    |R|² + 2*(R • V)*Δt + |V|²*(Δt)² = B²*(Δt)²
-    // Rearranging, we get a quadratic of the form:
-    //    a * (Δt)² + b * Δt + c = 0, where:
-
+    // B is the turret projectile's speed (I assume it's the same as the target's reported speed).
     float B = ProjectileSpeed;
-    float a = ProjectileVelocity.SizeSquared() - (B * B);  // a = |V|² - B²
-    float b = 2.0f * FVector::DotProduct(R, ProjectileVelocity); // b = 2 * (R • V)
-    float c = R.SizeSquared();  // c = |R|²
 
-    // Solve the quadratic equation for Δt.
-    float discriminant = b * b - 4.0f * a * c;
-    if (discriminant < 0.0f)
+    // We need to solve for time t such that:
+    //   f(t) = |R + V*t + 0.5*g*t^2| - B*t = 0
+    // Define f(t) below.
+    auto f = [&](float t) -> float {
+        FVector Q = R + ProjectileVelocity * t + 0.5f * g * t * t;
+        return Q.Size() - B * t;
+        };  // Chat GPT help me with this one
+
+    // f(t) = F(t) - B*t, where F(t) = |Q(t)|
+    // f'(t) = (Q(t) dot Q'(t)) / |Q(t)| - B, with Q'(t) = d/dt [R + V*t + 0.5*g*t^2] = V + g*t.
+    auto fPrime = [&](float t) -> float {
+        FVector Q = R + ProjectileVelocity * t + 0.5f * g * t * t;
+        float QSize = Q.Size(); // Chat GPT help me with this one
+
+        // Avoid division by zero.
+        if (FMath::IsNearlyZero(QSize))
+        {
+            return -B;
+        }
+        FVector QPrime = ProjectileVelocity + g * t;
+        return FVector::DotProduct(Q, QPrime) / QSize - B;
+        };
+
+    // t_initial = |R| / B.
+    float t = (R.Size() / B);
+    const int MaxIterations = 20;
+    const float Tolerance = 0.01f;
+    bool bConverged = false;
+
+    for (int i = 0; i < MaxIterations; ++i)
     {
-        UE_LOG(LogTemp, Warning, TEXT("No solution for impact time (discriminant < 0)"));
-        return;
+        float ft = f(t);
+        float fpt = fPrime(t);
+        if (FMath::Abs(ft) < Tolerance)
+        {
+            bConverged = true;
+            break;
+        }
+
+        // Prevent division by zero.
+        if (FMath::IsNearlyZero(fpt))
+        {
+            break;
+        }
+
+        t = t - ft / fpt;
+        // Ensure t stays positive.
+        if (t < 0.0f)
+        {
+            t = Tolerance;
+        }
     }
 
-    float sqrtDiscriminant = FMath::Sqrt(discriminant);
-    // Two possible solutions (we should choose one later):
-    float t1 = (-b + sqrtDiscriminant) / (2.0f * a);
-    float t2 = (-b - sqrtDiscriminant) / (2.0f * a);
-    // Choose the smallest positive Δt.
-    float impactTime = -1.0f;
-
-    if (t1 > 0.0f && t2 > 0.0f)
+    if (!bConverged)
     {
-        impactTime = FMath::Min(t1, t2);
+        UE_LOG(LogTemp, Warning, TEXT("Newton's method did not converge. Using last t = %.2f"), t);
     }
 
-    else if (t1 > 0.0f)
-    {
-        impactTime = t1;
-    }
+    float impactTime = t;
 
-    else if (t2 > 0.0f)
-    {
-        impactTime = t2;
-    }
+    // Now compute the predicted impact point, which is the target's position under gravity at time t.
+    FVector ImpactPoint = ProjectileLocation + ProjectileVelocity * impactTime + 0.5f * g * impactTime * impactTime;
 
-    else
-    {
-        UE_LOG(LogTemp, Warning, TEXT("No positive time solution for impact."));
-        return;
-    }
-
-    // Predict the impact point:
-    // The target will be at: T + V * Δt
-    FVector ImpactPoint = ProjectileLocation + ProjectileVelocity * impactTime;
-
-    // Determine the aiming direction vector from the turret to the impact point.
+    // The required aim direction is from S to ImpactPoint, its like solving fo Unit vector.
     FVector AimVector = ImpactPoint - S;
     AimVector.Normalize();
 
-    // Convert the aim vector to a rotation using UE build in function.
-    FRotator DesiredRotation = FRotationMatrix::MakeFromX(AimVector).Rotator(); //I used (Chat GPT) for this
-
-    // Extract yaw and pitch from the rotation.
+    // Convert the aim vector into a rotation Chat GPT help me here.
+    FRotator DesiredRotation = FRotationMatrix::MakeFromX(AimVector).Rotator();
     float desiredYaw = DesiredRotation.Yaw;
     float desiredPitch = DesiredRotation.Pitch;
 
-    // Log the computed values.
-    UE_LOG(LogTemp, Warning, TEXT("ImpactTime: %.2f, ImpactPoint: %s, AimVector: %s"), //I used (Chat GPT) for this
-    impactTime, *ImpactPoint.ToString(), *AimVector.ToString());
+    UE_LOG(LogTemp, Warning, TEXT("ImpactTime: %.2f, ImpactPoint: %s, AimVector: %s"),
+        impactTime, *ImpactPoint.ToString(), *AimVector.ToString());
 
-    // Adjust the turret's rotation.
+    // Update turret rotations.
     SetYaw(desiredYaw);
     SetPitch(desiredPitch);
-    //Fire();
 
-    // Draw a debug line from the turret's pivot (RotationPoint) to the predicted ImpactPoint.
+    // debug line for viz.
     DrawDebugLine(
         GetWorld(),
-        YawRotator->GetComponentLocation(),   // start point
-        ImpactPoint,                              // end point
-        FColor::Red,                              // line color
-        false,                                    // do not persist indefinitely
-        1.5f,                                     // duration (in seconds)
-        0,                                        // depth priority
-        5.0f                                      // thickness
+        YawRotator->GetComponentLocation(),   // Start point
+        ImpactPoint,                          // End point
+        FColor::Red,                          // Color
+        false,                                // Not persistent
+        1.5f,                                 // Lifetime
+        5,                                    // Depth Priority
+        2.0f                                  // Thickness
     );
 
-    // Now schedule firing after a delay.
+    // Schedule firing after a delay.
     if (!GetWorld()->GetTimerManager().IsTimerActive(FiringTimerHandle))
     {
         GetWorld()->GetTimerManager().SetTimer(FiringTimerHandle, this, &ATurret::Fire, FiringDelay, false);

@@ -33,6 +33,7 @@ public:
 	UFUNCTION()
 	void Fire() const;
 
+
 	UFUNCTION()
 	void SetYaw(float TargetYaw) const;
 	
@@ -60,14 +61,17 @@ protected:
 	UPROPERTY(EditDefaultsOnly)
 	UStaticMeshComponent* ArmMesh;
 
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)
+	UPROPERTY(EditDefaultsOnly, Blueprintable)
 	USceneComponent* PitchRotator;
 	
 	UPROPERTY(EditDefaultsOnly)
 	UStaticMeshComponent* CannonMesh;
 
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)
+	UPROPERTY(EditDefaultsOnly, Blueprintable)
 	USceneComponent* CentreMuzzle;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)
+	USceneComponent* ProjectileSpawnPoint;
 	
 	// Variables
 	UPROPERTY(EditDefaultsOnly)
