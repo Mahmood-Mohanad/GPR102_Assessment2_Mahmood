@@ -37,12 +37,7 @@ void ATargetLauncher::Tick(float DeltaTime)
 
 void ATargetLauncher::LaunchTarget()
 {
-	if (!ProjectileClass) // Check if we have a valid class assigned
-	{
-		UE_LOG(LogTemp, Warning, TEXT("ProjectileClass is NULL!"));
-		return;
-	}
-
+	
 	UWorld* World = GetWorld();
 	if (!World) return;
 
@@ -58,7 +53,7 @@ void ATargetLauncher::LaunchTarget()
 	// Move the spawn location forward
 	FVector AdjustedLocation = ForwardArrow->GetComponentLocation() + (ForwardArrow->GetForwardVector() * 30.0f);
 
-	// Spawn Parameters
+	// Spawn
 	FActorSpawnParameters SpawnParams;
 	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
 
@@ -68,7 +63,7 @@ void ATargetLauncher::LaunchTarget()
 	{
 		float ProjectileSpeed = 0.0f;
 		FVector ProjectileVelocity = FVector::ZeroVector;
-		float ProjectileTime = 0.0f; // Placeholder
+		float ProjectileTime = GetWorld()->TimeSeconds; // Placeholder
 
 		if (UProjectileMovementComponent* PM = Projectile->ProjectileMovement)
 		{

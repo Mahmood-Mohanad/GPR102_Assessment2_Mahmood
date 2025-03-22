@@ -9,13 +9,12 @@
 class ATurretProjectile;
 class ATargetProjectile;
 
-
 UCLASS()
 class TURRETMASTER_API ATurret : public AActor
 {
 	GENERATED_BODY()
-	
-public:	
+
+public:
 	// Sets default values for this actor's properties
 	ATurret();
 
@@ -26,27 +25,27 @@ protected:
 	// Pointer to the current target projectile
 	ATargetProjectile* CurrentTargetProjectile = nullptr;
 
-public:	
+public:
 	// Called every frame
 	virtual void Tick(float DeltaTime) override;
 
+	// Fire the turret projectile
 	UFUNCTION()
-	void Fire() const;
+	void Fire();
 
-
+	// Update turret yaw rotation.
 	UFUNCTION()
-	void SetYaw(float TargetYaw) const;
-	
-	UFUNCTION()
-	void SetPitch(float TargetPitch) const;
+	void SetYaw(float TargetYaw);
 
-	// Function that will handle the aiming calculations.
-	// It takes the projectile information as parameters.
+	// Update turret pitch rotation.
 	UFUNCTION()
-	void AimingMath(float ProjectileSpeed, FVector ProjectileLocation, FVector ProjectileVelocity, float ProjectileTime);
+	void SetPitch(float TargetPitch);
 
-	// Add a function that will be bound to the launcher’s delegate.
-	// This function will receive projectile info.
+	// Handle the aiming calculations using target position and velocity.
+	UFUNCTION()
+	void AimingMath(FVector TargetPos, FVector TargetVel);
+
+	// Function bound to the launcher’s delegate to receive projectile info.
 	UFUNCTION()
 	void OnTargetProjectileLaunched(float ProjectileSpeed, FVector ProjectileLocation, FVector ProjectileVelocity, float ProjectileTime, ATargetProjectile* TargetProjectilePtr);
 
@@ -61,24 +60,21 @@ protected:
 	UPROPERTY(EditDefaultsOnly)
 	UStaticMeshComponent* ArmMesh;
 
-	UPROPERTY(EditDefaultsOnly, Blueprintable)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)
 	USceneComponent* PitchRotator;
-	
+
 	UPROPERTY(EditDefaultsOnly)
 	UStaticMeshComponent* CannonMesh;
 
-	UPROPERTY(EditDefaultsOnly, Blueprintable)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)
 	USceneComponent* CentreMuzzle;
 
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)
-	USceneComponent* ProjectileSpawnPoint;
-	
 	// Variables
 	UPROPERTY(EditDefaultsOnly)
 	TSubclassOf<ATurretProjectile> ProjectileClass;
 
 	UPROPERTY(EditDefaultsOnly)
-	float TurnSpeed = 5.0f;
+	float TurnSpeed = 500000.0f;
 
 	// Store latest target info
 	float LastTargetProjectileSpeed = 0.0f;
@@ -89,7 +85,12 @@ protected:
 private:
 	// Delay before firing once aim is computed.
 	UPROPERTY(EditDefaultsOnly, Category = "Firing")
-	float FiringDelay = 0.2f;
+	float FiringDelay = 0.07f;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Firing")
+
+	float TurretProjectileSpeed = 40000.0f;
+	float LastInterceptTime = 0.0f;
 
 	// Timer handle used to schedule firing.
 	FTimerHandle FiringTimerHandle;
