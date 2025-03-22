@@ -45,7 +45,7 @@ public:
 	UFUNCTION()
 	void AimingMath(float ProjectileSpeed, FVector ProjectileLocation, FVector ProjectileVelocity, float ProjectileTime);
 
-	// Step 5: Add a function that will be bound to the launcher’s delegate.
+	// Add a function that will be bound to the launcher’s delegate.
 	// This function will receive projectile info.
 	UFUNCTION()
 	void OnTargetProjectileLaunched(float ProjectileSpeed, FVector ProjectileLocation, FVector ProjectileVelocity, float ProjectileTime, ATargetProjectile* TargetProjectilePtr);
@@ -89,7 +89,7 @@ protected:
 private:
 	// Delay before firing once aim is computed.
 	UPROPERTY(EditDefaultsOnly, Category = "Firing")
-	float FiringDelay = 0.5f;
+	float FiringDelay = 0.2f;
 
 	// Timer handle used to schedule firing.
 	FTimerHandle FiringTimerHandle;

@@ -85,9 +85,46 @@ void ATurret::Tick(float DeltaTime)
 
 void ATurret::Fire() const
 {
+    // Set up spawn parameters
+    FActorSpawnParameters SpawnParams;
+    SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 
+    // Spawn the turret projectile at the CentreMuzzle's location and rotation.
+    ATurretProjectile* TurretProj = GetWorld()->SpawnActor<ATurretProjectile>(
+        ProjectileClass,
+        CentreMuzzle->GetComponentLocation(),
+        CentreMuzzle->GetComponentRotation(),
+        SpawnParams
+    );
+
+    if (TurretProj)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Turret Projectile spawned."));
+
+        // Optionally set a lifespan so the projectile is cleaned up after some time.
+        TurretProj->SetLifeSpan(5.0f);
+
+        // Get the projectile's movement component (make sure it's accessible).
+        UProjectileMovementComponent* PM = TurretProj->GetProjectileMovement();
+        if (PM)
+        {
+            // Use the CentreMuzzle's forward vector (which should now be pointing toward the target 
+            // because the turret's yaw and pitch have been updated by AimingMath)
+            FVector NewVelocity = CentreMuzzle->GetForwardVector() * PM->InitialSpeed;
+            PM->Velocity = NewVelocity;
+            PM->Activate(); // Ensure the movement component is active.
+            UE_LOG(LogTemp, Warning, TEXT("Turret Projectile velocity set to: %s"), *NewVelocity.ToString());
+        }
+        else
+        {
+            UE_LOG(LogTemp, Warning, TEXT("No ProjectileMovement component found on turret projectile."));
+        }
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Failed to spawn turret projectile."));
+    }
 }
-
 
 void ATurret::SetYaw(float TargetYaw) const
 {
@@ -95,7 +132,7 @@ void ATurret::SetYaw(float TargetYaw) const
     FRotator CurrentRotation = YawRotator->GetComponentRotation();
 
     // Interpolate the yaw value.
-    float NewYaw = FMath::FInterpTo(CurrentRotation.Yaw, TargetYaw, GetWorld()->GetDeltaSeconds(), TurnSpeed);
+    float NewYaw = FMath::FInterpTo(CurrentRotation.Yaw, TargetYaw, GetWorld()->GetDeltaSeconds(), TurnSpeed * 4);
 
     // Create a new rotation keeping pitch unchanged.
     FRotator NewRotation(CurrentRotation.Pitch, NewYaw, CurrentRotation.Roll);
@@ -108,7 +145,7 @@ void ATurret::SetPitch(float TargetPitch) const
   FRotator CurrentRelRotation = PitchRotator->GetRelativeRotation();
 
   // Interpolate to the target pitch.
-  float NewPitch = FMath::FInterpTo(CurrentRelRotation.Pitch, TargetPitch, GetWorld()->GetDeltaSeconds(), TurnSpeed);
+  float NewPitch = FMath::FInterpTo(CurrentRelRotation.Pitch, TargetPitch, GetWorld()->GetDeltaSeconds(), TurnSpeed * 4);
 
   // Keep other components of rotation unchanged.
   FRotator NewRelRotation(NewPitch, CurrentRelRotation.Yaw, CurrentRelRotation.Roll);
@@ -142,8 +179,8 @@ void ATurret::AimingMath(float ProjectileSpeed, FVector ProjectileLocation, FVec
         *ProjectileVelocity.ToString(),
         ProjectileTime);
 
-    // Define the firing origin S as the location of PitchRotator.
-    FVector S = BaseMesh->GetComponentLocation();
+    // Define the firing origin.
+    FVector S = CentreMuzzle->GetComponentLocation();
 
     // Let R be the initial relative position vector from S to the target's spawn position.
     FVector R = ProjectileLocation - S;
@@ -180,13 +217,14 @@ void ATurret::AimingMath(float ProjectileSpeed, FVector ProjectileLocation, FVec
     // t_initial = |R| / B.
     float t = (R.Size() / B);
     const int MaxIterations = 20;
-    const float Tolerance = 0.01f;
+    const float Tolerance = 0.01f; //will help us later
     bool bConverged = false;
 
     for (int i = 0; i < MaxIterations; ++i)
     {
         float ft = f(t);
         float fpt = fPrime(t);
+
         if (FMath::Abs(ft) < Tolerance)
         {
             bConverged = true;
@@ -212,8 +250,7 @@ void ATurret::AimingMath(float ProjectileSpeed, FVector ProjectileLocation, FVec
         UE_LOG(LogTemp, Warning, TEXT("Newton's method did not converge. Using last t = %.2f"), t);
     }
 
-    float impactTime = t;
-
+    float impactTime = t + FiringDelay;
     // Now compute the predicted impact point, which is the target's position under gravity at time t.
     FVector ImpactPoint = ProjectileLocation + ProjectileVelocity * impactTime + 0.5f * g * impactTime * impactTime;
 
@@ -226,8 +263,6 @@ void ATurret::AimingMath(float ProjectileSpeed, FVector ProjectileLocation, FVec
     float desiredYaw = DesiredRotation.Yaw;
     float desiredPitch = DesiredRotation.Pitch;
 
-    UE_LOG(LogTemp, Warning, TEXT("ImpactTime: %.2f, ImpactPoint: %s, AimVector: %s"),
-        impactTime, *ImpactPoint.ToString(), *AimVector.ToString());
 
     // Update turret rotations.
     SetYaw(desiredYaw);
